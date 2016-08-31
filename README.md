@@ -35,10 +35,10 @@ Each pattern is evaluated using new RegExp so do not include `/` at beginning an
 Minimum age of the LogGroup in hours. Only older LogGroups will be deleted.
 
 ###ExcludeRetention
-Set to true if you want LogGroups that have retention configured to be excluded.
+Set to true if you want to exclude LogGroups that have retention configured.
 
 ###ExcludeSubscribed
-Set to true if you want LogGroups that have any subscriptions configured.
+Set to true if you want to exclude LogGroups that have any subscriptions configured.
 
 ###LastActivityHours
 If the LogGroup fits all criteria for deletion it will only be deleted
