@@ -1,0 +1,174 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Cloud Watch Logs Cleaner",
+    "Parameters": {
+        "S3SourceCodeBucket": {
+            "Type": "String",
+            "Description": "S3 Bucket where source code package is located"
+        },
+        "S3SourceCodeKey": {
+            "Type": "String",
+            "Description": "S3 key to source code package in S3SourceCodeBucket"
+        },
+        "ScheduleExpression": {
+            "Type": "String",
+            "Description": "CloudWatch Event Rule schedule. A daily run is recommended.",
+            "Default": "rate(1 day)"
+        },
+        "InclusionPrefixes": {
+            "Type": "String",
+            "Description": "Comma separated list of Log Group prefixes to include. See readme for details.",
+            "Default": ""
+        },
+        "ExclusionPatterns": {
+            "Type": "String",
+            "Description": "Comma separated list of patterns to exclude. See readme for details.",
+            "Default": ""
+        },
+        "MinAgeHours": {
+            "Type": "Number",
+            "Description": "Minimum time passed since Log Group creation time in hours. See readme for details.",
+            "Default": 48,
+            "MinValue": 0
+        },
+        "LastActivityHours": {
+            "Type": "Number",
+            "Description": "Minimum time passed since LastEventReceived in hours. See readme for details.",
+            "Default": 8,
+            "MinValue": 0
+        },
+        "ExcludeRetention": {
+            "Type": "String",
+            "AllowedValues": ["true", "false"],
+            "Description": "Set to true if you want to exclude all Log Groups that have retention configured. See readme for details.",
+            "Default": "false"
+        },
+        "ExcludeSubscribed": {
+            "Type": "String",
+            "AllowedValues": ["true", "false"],
+            "Description": "Set to true if you want to exclude all Log Groups that have subscriptions configured. See readme for details.",
+            "Default": "false"
+        },
+        "RuleState": {
+            "Type": "String",
+            "Default": "ENABLED",
+            "AllowedValues": ["ENABLED", "DISABLED"],
+            "Description": "Enable or disable the scheduled invocation"
+        }
+    },
+    "Resources": {
+        "LambdaFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [{
+                    "PolicyName": "CloudWatchLogs_FullAccess",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "logs:*"
+                                ],
+                                "Resource": "arn:aws:logs:*:*:*"
+                            }
+                        ]
+                    }
+                }]
+
+            }
+        },
+        "LambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Code": {
+                    "S3Bucket": { "Ref": "S3SourceCodeBucket" },
+                    "S3Key": { "Ref": "S3SourceCodeKey" }
+                },
+                "Description": "CloudWatchLogs clean up",
+                "Handler": "src/index.handler",
+                "MemorySize": 256,
+                "Role": { "Fn::GetAtt": ["LambdaFunctionRole", "Arn"] },
+                "Runtime": "nodejs4.3",
+                "Timeout": 300
+            }
+        },
+        "ScheduleEventRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [{
+                    "PolicyName": "InvokeLogCleanUpLambda",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "lambda:InvokeFunction"
+                                ],
+                                "Resource": { "Fn::GetAtt": ["LambdaFunction", "Arn"] }
+                            }
+                        ]
+                    }
+                }]
+            }
+        },
+        "LambdaScheduleEvent": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Description": "Run CloudWatch clean up Lambda regularly",
+                "Name": "CloudWatchLogsCleanup",
+                "RoleArn": { "Fn::GetAtt": ["ScheduleEventRole", "Arn"] },
+                "ScheduleExpression": { "Ref": "ScheduleExpression" },
+                "State": { "Ref": "RuleState" },
+                "Targets": [{
+                    "Arn": { "Fn::GetAtt": ["LambdaFunction", "Arn"] },
+                    "Id": "CloudWatchLogsCleanup",
+                    "Input": { "Fn::Join": ["", [
+                        "{\n",
+                            "\"inclusionPrefixes\": \"", { "Ref": "InclusionPrefixes" }, "\",\n",
+                            "\"exclusionPatterns\": \"", { "Ref": "ExclusionPatterns" }, "\",\n",
+                            "\"minAgeHours\": \"", { "Ref": "MinAgeHours" }, "\",\n",
+                            "\"lastActivityHours\": \"", { "Ref": "LastActivityHours" }, "\",\n",
+                            "\"excludeRetention\": \"", { "Ref": "ExcludeRetention" }, "\",\n",
+                            "\"excludeSubscribed\": \"", { "Ref": "ExcludeSubscribed" }, "\"\n",
+                        "}"
+                    ]] }
+                }]
+            }
+        },
+        "LambdaFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": { "Ref": "LambdaFunction" },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": { "Fn::GetAtt": ["LambdaScheduleEvent", "Arn"] }
+            }
+        }
+    }
+}
