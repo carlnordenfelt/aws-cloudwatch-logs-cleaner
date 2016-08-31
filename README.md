@@ -13,7 +13,7 @@ Output logs include what groups were deleted and what groups were skipped and wh
 * Run `make package`
 * For each region you want to clean up logs in:
     * Upload `package.zip` to an S3 bucket in the same region as you'll create the stack in.
-        * Ensure the S3 key is unique if you are updating an existing setup
+        * Ensure the S3 key is unique if you have patched the code from the original setup.
     * Create a new stack using [the CloudFormation template](support/aws/cloudformation/cloud-watch-log-cleaner.template).
         * See configuration details below
 
