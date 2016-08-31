@@ -43,3 +43,9 @@ Set to true if you want LogGroups that have any subscriptions configured.
 ###LastActivityHours
 If the LogGroup fits all criteria for deletion it will only be deleted
 if it has had no write activity for the given number of hours
+
+#TODO
+
+* Travis builds
+* Coveralls
+* Badges
